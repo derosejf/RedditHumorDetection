@@ -333,9 +333,9 @@ def accuracy(out, labels):
 def get_metrics(logits, labels):
     # import pdb;pdb.set_trace()
     outputs = np.argmax(logits, axis=1)
-    f1 = f1_score(labels, outputs, average="macro")
-    prec = precision_score(labels, outputs, average="macro")
-    recall = recall_score(labels, outputs, average="macro")
+    f1 = f1_score(labels, outputs)
+    prec = precision_score(labels, outputs)
+    recall = recall_score(labels, outputs)
     return f1, prec, recall
 
 
@@ -663,13 +663,13 @@ def main():
             if full_labels is None:
                 full_labels = label_ids
             else:
-                full_labels = np.concatenate((full_labels, label_ids), axis=0)
+                full_labels = np.append(full_labels, label_ids, axis=0)
 
 
             if full_logits is None:
                 full_logits = logits
             else:
-                full_logits = np.concatenate((full_logits, logits), axis=0)
+                full_logits = np.append(full_logits, logits, axis=0)
 
             tmp_eval_accuracy = accuracy(logits, label_ids)
 
