@@ -680,12 +680,15 @@ def main():
             nb_eval_steps += 1
 
         eval_f1, eval_precision, eval_recall = get_metrics(full_logits, full_labels)
+        full_accuracy = accuracy(full_logits, full_labels)
+
 
         eval_loss = eval_loss / nb_eval_steps
         eval_accuracy = eval_accuracy / nb_eval_examples
         loss = tr_loss/nb_tr_steps if args.do_train else None
         result = {'eval_loss': eval_loss,
                   'eval_accuracy': eval_accuracy,
+                  'eval_accuracy_full': full_accuracy,
                   'global_step': global_step,
                   'loss': loss,
                   'eval_f1': eval_f1,
