@@ -72,6 +72,10 @@ print(data_train.shape, "Is the shape of the train")
 
 print(data_train["score"].value_counts())
 
+output = os.path.join(base_path, "reddit_cleaning", "output")
+if not os.path.exists(output):
+    os.mkdir(output)
+
 data_train.to_csv(os.path.join(base_path, "reddit_cleaning", "output/train.csv"), encoding="utf-8", header=True)
 data_test.to_csv(os.path.join(base_path, "reddit_cleaning", "output/test.csv"), encoding="utf-8", header=True)
 data_val.to_csv(os.path.join(base_path, "reddit_cleaning", "output/dev.csv"), encoding="utf-8", header=True,)

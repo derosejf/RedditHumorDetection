@@ -606,6 +606,8 @@ def main():
                     optimizer.zero_grad()
                     global_step += 1
 
+                    print('Step {}, Loss {}'.format(global_step, round(tr_loss / global_step, 4)))
+
         # Save a trained model and the associated configuration
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)

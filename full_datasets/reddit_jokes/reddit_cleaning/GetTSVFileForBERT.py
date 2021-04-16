@@ -33,6 +33,13 @@ train_full.head()
 
 print(train_full["score"].value_counts())
 
+output = os.path.join(base_path, "output", "output_for_bert")
+if not os.path.exists(output):
+    os.mkdir(output)
+    os.mkdir(os.path.join(output, 'full'))
+    os.mkdir(os.path.join(output, 'body'))
+    os.mkdir(os.path.join(output, 'punch'))
+
 train_full.to_csv(os.path.join(base_path, "output/output_for_bert/full/train.tsv"), encoding="utf-8", header=False)
 test_full.to_csv(os.path.join(base_path, "output/output_for_bert/full/test.tsv"), encoding="utf-8", header=False)
 dev_full.to_csv(os.path.join(base_path, "output/output_for_bert/full/dev.tsv"), encoding="utf-8", header=False,)
