@@ -40,6 +40,7 @@ from tqdm import tqdm, trange
 
 from transformers import (BertTokenizer, BertForSequenceClassification, AdamW)
 
+from utils import convert_examples_new
 
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report, confusion_matrix
 
@@ -565,7 +566,7 @@ def main():
     nb_tr_steps = 0
     tr_loss = 0
     if args.do_train:
-        train_features = convert_examples_to_features(
+        train_features = convert_examples_new( #convert_examples_to_features(
             train_examples, label_list, args.max_seq_length, tokenizer)
         logger.info("***** Running training *****")
         logger.info("  Num examples = %d", len(train_examples))
@@ -641,7 +642,7 @@ def main():
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         eval_examples = processor.get_dev_examples(args.data_dir)
-        eval_features = convert_examples_to_features(
+        eval_features = convert_examples_new( #convert_examples_to_features(
             eval_examples, label_list, args.max_seq_length, tokenizer)
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))

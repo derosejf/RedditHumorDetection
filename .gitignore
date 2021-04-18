@@ -1,3 +1,5 @@
 env/
+.idea/*
+.idea/
 *.pyc
 full_datasets/reddit_jokes/reddit_cleaning/output
