@@ -346,11 +346,11 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     # convert features to tensor dataset
     input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     input_masks = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+    token_type_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
     ambiguity_scores = torch.tensor([f.ambiguity for f in features], dtype=torch.long)
     labels = torch.tensor([f.label_id for f in features], dtype=torch.long)
 
-    dataset = TensorDataset(input_ids, input_masks, token_type_ids, ambiguity_scores, labels)
+    dataset = TensorDataset(input_ids, input_masks, token_type_ids, labels, ambiguity_scores)
 
     return dataset
 
@@ -711,7 +711,7 @@ def main():
         full_logits = None
         full_labels = None
 
-        for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
+        for input_ids, input_mask, segment_ids, label_ids, _ in tqdm(eval_dataloader, desc="Evaluating"):
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
             segment_ids = segment_ids.to(device)

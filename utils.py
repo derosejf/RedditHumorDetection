@@ -144,7 +144,7 @@ def convert_dataset_to_features(dataset, max_seq_len, tokenizer):
         features.append(
             InputFeatures(input_ids=encoded.input_ids,
                           input_mask=encoded.attention_mask,
-                          token_type_ids=encoded.token_type_ids,
+                          segment_ids=encoded.token_type_ids,
                           label_id=example.label,
                           ambiguity=aligned_scores))
     return features
