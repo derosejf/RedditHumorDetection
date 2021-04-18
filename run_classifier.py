@@ -594,7 +594,9 @@ def main():
                           'attention_mask': batch[1],
                           'labels': batch[3]}
 
-                loss = model(**inputs)
+                outputs = model(**inputs)
+                loss = outputs[0]
+
                 if n_gpu > 1:
                     loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
@@ -671,8 +673,8 @@ def main():
                       'labels': label_ids}
 
             with torch.no_grad():
-                tmp_eval_loss = model(input_ids, segment_ids, input_mask, label_ids)
-                logits = model(input_ids, segment_ids, input_mask)
+                outputs = model(**inputs)
+                tmp_eval_loss, logits = outputs[:2]
 
             logits = logits.detach().cpu().numpy()
             label_ids = label_ids.to('cpu').numpy()
