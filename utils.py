@@ -123,6 +123,7 @@ def convert_dataset_to_features(dataset, max_seq_len, tokenizer):
 
         input_ids = encoded.input_ids
 
+        '''
         # Align ambiguity scores with BERT tokens
         bert_tokens = tokenizer.convert_ids_to_tokens(input_ids)
         alt_tokens, ambiguity_scores = zip(*example.ambiguity)
@@ -131,20 +132,21 @@ def convert_dataset_to_features(dataset, max_seq_len, tokenizer):
         for i in range(len(alt_to_bert)):
             for j in alt_to_bert[i]:
                 aligned_scores[j] = ambiguity_scores[i]
+        '''
 
         if ex_index < 5:
             logger.info("*** Example ***")
-            logger.info("tokens: %s" % " ".join([str(x) for x in bert_tokens]))
+            #logger.info("tokens: %s" % " ".join([str(x) for x in bert_tokens]))
             logger.info("input_ids: %s" % " ".join([str(x) for x in encoded.input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in encoded.attention_mask]))
             logger.info("token_type_ids: %s" % " ".join([str(x) for x in encoded.token_type_ids]))
-            logger.info("ambiguity scores: %s" % " ".join([str(x) for x in aligned_scores]))
+            #logger.info("ambiguity scores: %s" % " ".join([str(x) for x in aligned_scores]))
             logger.info("label: %d" % example.label)
 
         features.append(
             InputFeatures(input_ids=encoded.input_ids,
                           input_mask=encoded.attention_mask,
                           segment_ids=encoded.token_type_ids,
-                          label_id=example.label,
-                          ambiguity=aligned_scores))
+                          label_id=example.label))#,
+                          #ambiguity=aligned_scores))
     return features

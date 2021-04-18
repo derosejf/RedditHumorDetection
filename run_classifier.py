@@ -694,7 +694,7 @@ def main():
         eval_data = load_and_cache_examples(args, tokenizer, True)
 
         logger.info("***** Running evaluation *****")
-        logger.info("  Num examples = %d", len(eval_examples))
+        logger.info("  Num examples = %d", len(eval_data))
         logger.info("  Batch size = %d", args.eval_batch_size)
         #all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
         #all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
