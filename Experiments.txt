@@ -1,0 +1,70 @@
+Notable differences between our model and their model:
+
+Training Params
+1) They train on effective batch size of 256
+2) They train for 1 epoch only
+3) Learning rate - 2e-5
+4) Warmup
+5) They have a hardcoded weight decay
+6) They use a slightly different optimizer called BertAdam()
+7) Seq length of 128
+
+Other preparation notes:
+- All of their up/down sampling is down 
+- They do strict truncation from the end of sentences
+- They do not separate body and punch line, just leave "_____"
+  between sentences
+
+Github I made: https://github.com/derosejf/RedditHumorDetection
+
+RESULTS
+- Their evaluation numbers are reported on the test set (NOT dev set)
+
+I ran these experiments using their github script:
+---- After 1 epoch --- Test set
+eval_acc = 70-72.5
+eval_loss = .569
+global_step = 81
+loss = .53
+
+---- After 1 epoch --- Dev Set
+eval_acc = 72.2
+eval_loss = .61
+global_step = 81
+loss = .53
+
+EXPERIMENTS I HAVE RUN TODAY
+
+1) Our script directly with their hyperparameters (larger batch, 1 epoch, seq 128 & 512):
+   - Slight improvement, but significant enough to account for differences
+   - Epoch 1, Train Loss .65, Eval Loss .79
+
+2) Ran their experiments with no warmup:
+   - Basically the exact same results above - not responsible (slight accuracy drop)
+
+3) Our data is apparently the same as their data so all my data preparation experiments
+   are actually not contributing here.
+
+4) Sanity check on their strange accuracy formula
+   - Actually totally fine and I'm dumb
+   - There is a slight bias where the last batch could "increase" the accuracy
+   because they actually just average over epochs. Not a huge deal (~.5 max error)
+
+5) Our experiment script but not separating sentences as they do
+   - Format: "body ______ punchline" (theirs) vs. ours "body [SEP] punchline"
+   - This was not responsible for the drop in accuracy
+
+TO STILL TEST
+
+1) Could be a result of our implemented gradient clipping. We should rerun our experiment
+   and see if removing this helps. It is possible that our gradient clipping is already
+   not happening due to the default value however.
+
+2) Optimizer Checks - They have a hardcoded weight decay. We just do a simple 'model.parameters()'.
+   They also use a slightly different optimizer than we do.
+
+3) Initial model weight checks - It is possible that the version of the model we are loading
+   are actually pretrained differently as there is from an old version of transformers.
+
+
+
