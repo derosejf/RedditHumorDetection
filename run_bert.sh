@@ -10,6 +10,6 @@ python3 run_classifier.py \
 --learning_rate=2e-5 \
 --num_train_epochs=1.0 \
 --do_lower_case \
---gradient_accumulation_steps 24 \
+--gradient_accumulation_steps 8 \
 --bert_model=bert-base-uncased \
 --output_dir=./final_results \
