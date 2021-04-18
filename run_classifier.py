@@ -608,7 +608,7 @@ def main():
                     loss.backward()
 
                 tr_loss += loss.item()
-                nb_tr_examples += input_ids.size(0)
+                nb_tr_examples += inputs.input_ids.size(0)
                 nb_tr_steps += 1
                 if (step + 1) % args.gradient_accumulation_steps == 0:
                     #if args.fp16:
