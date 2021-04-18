@@ -532,12 +532,14 @@ def main():
         model = torch.nn.DataParallel(model)
 
     # Prepare optimizer
+    '''
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
+    '''
     if args.fp16:
         try:
             from apex.optimizers import FP16_Optimizer
@@ -555,7 +557,7 @@ def main():
             optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
 
     else:
-        optimizer = AdamW(optimizer_grouped_parameters,
+        optimizer = AdamW(model.parameters(), #optimizer_grouped_parameters,
                           lr=args.learning_rate)
         #optimizer = BertAdam(optimizer_grouped_parameters,
         #                     lr=args.learning_rate,
@@ -609,7 +611,7 @@ def main():
                     loss.backward()
 
                 tr_loss += loss.item()
-                nb_tr_examples += inputs.input_ids.size(0)
+                nb_tr_examples += inputs['input_ids'].size(0)
                 nb_tr_steps += 1
                 if (step + 1) % args.gradient_accumulation_steps == 0:
                     #if args.fp16:
@@ -686,7 +688,6 @@ def main():
             else:
                 full_labels = np.append(full_labels, label_ids, axis=0)
 
-
             if full_logits is None:
                 full_logits = logits
             else:
@@ -703,10 +704,9 @@ def main():
         eval_f1, eval_precision, eval_recall = get_metrics(full_logits, full_labels)
         full_accuracy = accuracy(full_logits, full_labels)
 
-
         eval_loss = eval_loss / nb_eval_steps
         eval_accuracy = eval_accuracy / nb_eval_examples
-        loss = tr_loss/nb_tr_steps if args.do_train else None
+        loss = tr_loss/global_step if args.do_train else None
         result = {'eval_loss': eval_loss,
                   'eval_accuracy': eval_accuracy,
                   'eval_accuracy_full': full_accuracy,

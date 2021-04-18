@@ -25,10 +25,10 @@ def prepare_text(text):  # something happened to the ____ stuff...
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, input_ids, input_mask, token_type_ids, label_id, ambiguity):
+    def __init__(self, input_ids, input_mask, segment_ids, label_id, ambiguity=None):
         self.input_ids = input_ids
         self.input_mask = input_mask
-        self.token_type_ids = token_type_ids
+        self.segment_ids = segment_ids
         self.label_id = label_id
         self.ambiguity = ambiguity
 
