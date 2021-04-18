@@ -40,7 +40,8 @@ from tqdm import tqdm, trange
 
 from transformers import (BertTokenizer, BertForSequenceClassification, AdamW)
 
-from utils import convert_examples_new
+from utils import convert_examples_new, convert_dataset_to_features
+from dataset import HumorDetectionDataset
 
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report, confusion_matrix
 
@@ -317,6 +318,43 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
     return features
 
 
+def load_and_cache_examples(args, tokenizer, evaluate=False):
+    '''
+    Loads in a cached file for training and/or builds a cached file for this data
+
+    :return:
+    '''
+    # Build the dataset
+    task = 'dev' if evaluate else 'train'
+    cached_features_files = os.path.join(args.data_dir, 'cached_{}_{}_{}'.format(
+        task,
+        args.ambiguity_fn,
+        str(args.max_seq_length)))
+
+    if os.path.exists(cached_features_files) and not args.overwrite_cache:
+        logger.info("Creating features from dataset file at %s", os.path.join(args.data_dir, cached_features_files))
+        features = torch.load(cached_features_files)
+    else:
+        logger.info("Creating features from dataset file at %s", args.data_dir)
+
+        dataset = HumorDetectionDataset(args.data_dir, args.max_seq_length, task, args.ambiguity_fn)
+        features = convert_dataset_to_features(dataset, args.max_seq_length, tokenizer)
+
+        logger.info("Saving features into cached file %s", cached_features_files)
+        torch.save(features, cached_features_files)
+
+    # convert features to tensor dataset
+    input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+    input_masks = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+    ambiguity_scores = torch.tensor([f.ambiguity for f in features], dtype=torch.long)
+    labels = torch.tensor([f.label_id for f in features], dtype=torch.long)
+
+    dataset = TensorDataset(input_ids, input_masks, token_type_ids, ambiguity_scores, labels)
+
+    return dataset
+
+
 def _truncate_seq_pair(tokens_a, tokens_b, max_length):
     """Truncates a sequence pair in place to the maximum length."""
 
@@ -434,6 +472,9 @@ def main():
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
+    parser.add_argument("--overwrite_cache", action='store_true')
+    parser.add_argument('--ambiguity_fn', action='store_true', default="none",
+                        help='Ambiguity function. none, wn (for WordNet), or csi (for course sense inventory)')
     parser.add_argument('--server_ip', type=str, default='', help="Can be used for distant debugging.")
     parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")
     args = parser.parse_args()
@@ -495,18 +536,21 @@ def main():
     if task_name not in processors:
         raise ValueError("Task not found: %s" % (task_name))
 
+    '''
     processor = processors[task_name]()
     num_labels = num_labels_task[task_name]
     label_list = processor.get_labels()
-
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
-
+    '''
     train_examples = None
     num_train_optimization_steps = None
+
+    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    train_data = load_and_cache_examples(args, tokenizer)
+
     if args.do_train:
-        train_examples = processor.get_train_examples(args.data_dir)
+        #train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = int(
-            len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
+            len(train_data) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
         if args.local_rank != -1:
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
@@ -517,7 +561,8 @@ def main():
     model = BertForSequenceClassification.from_pretrained(args.bert_model,
               # state_dict=model_state_dict,
               #cache_dir=cache_dir,
-              num_labels = num_labels)
+              num_labels=2)
+
     if args.fp16:
         model.half()
     model.to(device)
@@ -532,14 +577,12 @@ def main():
         model = torch.nn.DataParallel(model)
 
     # Prepare optimizer
-    '''
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-    '''
     if args.fp16:
         try:
             from apex.optimizers import FP16_Optimizer
@@ -557,7 +600,7 @@ def main():
             optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
 
     else:
-        optimizer = AdamW(model.parameters(), #optimizer_grouped_parameters,
+        optimizer = AdamW(optimizer_grouped_parameters,
                           lr=args.learning_rate)
         #optimizer = BertAdam(optimizer_grouped_parameters,
         #                     lr=args.learning_rate,
@@ -568,17 +611,18 @@ def main():
     nb_tr_steps = 0
     tr_loss = 0
     if args.do_train:
-        train_features = convert_examples_new( #convert_examples_to_features(
-            train_examples, label_list, args.max_seq_length, tokenizer)
+        #train_features = convert( #convert_examples_to_features(
+        #    train_examples, label_list, args.max_seq_length, tokenizer)
+
         logger.info("***** Running training *****")
-        logger.info("  Num examples = %d", len(train_examples))
+        logger.info("  Num examples = %d", len(train_data))
         logger.info("  Batch size = %d", args.train_batch_size)
         logger.info("  Num steps = %d", num_train_optimization_steps)
-        all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
-        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-        train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        #all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
+        #all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
+        #all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
+        #all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
+        #train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
         if args.local_rank == -1:
             train_sampler = RandomSampler(train_data)
         else:
@@ -589,7 +633,7 @@ def main():
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
-            for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+            for step, batch in enumerate(train_dataloader):
                 batch = tuple(t.to(device) for t in batch)
 
                 inputs = {'input_ids': batch[0],
@@ -643,17 +687,20 @@ def main():
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        eval_examples = processor.get_dev_examples(args.data_dir)
-        eval_features = convert_examples_new( #convert_examples_to_features(
-            eval_examples, label_list, args.max_seq_length, tokenizer)
+        #eval_examples = processor.get_dev_examples(args.data_dir)
+        #eval_features = convert_examples_new( #convert_examples_to_features(
+        #    eval_examples, label_list, args.max_seq_length, tokenizer)
+
+        eval_data = load_and_cache_examples(args, tokenizer, True)
+
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))
         logger.info("  Batch size = %d", args.eval_batch_size)
-        all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
-        all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-        eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        #all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
+        #all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
+        #all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
+        #all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
+        #eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
         # Run prediction for full data
         eval_sampler = SequentialSampler(eval_data)
         eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
