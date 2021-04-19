@@ -42,6 +42,7 @@ from transformers import (BertTokenizer, BertForSequenceClassification, AdamW)
 
 from utils import convert_examples_new, convert_dataset_to_features
 from dataset import HumorDetectionDataset
+from model import HumorDetectionModel
 
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report, confusion_matrix
 
@@ -420,8 +421,12 @@ def main():
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
     parser.add_argument("--overwrite_cache", action='store_true')
-    parser.add_argument('--ambiguity_fn', action='store_true', default="none",
+    parser.add_argument('--ambiguity_fn', type=str, default="none",
                         help='Ambiguity function. none, wn (for WordNet), or csi (for course sense inventory)')
+    parser.add_argument('--rnn_size', type=int, default=768,
+                        help='Hidden dimension of each direction of the bi-LSTM.')
+    parser.add_argument('--bert_base', action='store_true', default=False,
+                        help='loads in bert-base instead of our custom model.')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -458,12 +463,21 @@ def main():
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
     train_data = load_and_cache_examples(args, tokenizer)
 
+    use_ambiguity = args.ambiguity_fn != "none"
+
     if args.do_train:
         num_train_optimization_steps = int(
             len(train_data) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
 
     # Prepare model
-    model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
+    if not args.bert_base:
+        logger.info('Using custom model')
+        model = HumorDetectionModel(rnn_size=args.rnn_size, use_ambiguity=use_ambiguity)
+    else:
+        logger.info('Loading in standard bert-base-uncased -- baseline testing')
+        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
+
+    #model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
     model.to(device)
 
     # Prepare optimizer
@@ -507,6 +521,9 @@ def main():
                           'token_type_ids': batch[2],
                           'attention_mask': batch[1],
                           'labels': batch[3]}
+
+                if not args.bert_base:
+                    inputs['ambiguity_scores'] = batch[4]
 
                 outputs = model(**inputs)
                 loss = outputs[0]

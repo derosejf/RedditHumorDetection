@@ -10,8 +10,8 @@ python3 run_classifier.py \
 --learning_rate=2e-5 \
 --num_train_epochs=1.0 \
 --do_lower_case \
---old_load \
 --gradient_accumulation_steps 8 \
 --overwrite_cache \
 --bert_model=bert-base-uncased \
 --output_dir=./final_results \
+--ambiguity_fn=csi \
