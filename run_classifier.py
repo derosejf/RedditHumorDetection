@@ -460,6 +460,12 @@ def main():
         logger.info("  Batch size = %d", args.train_batch_size)
         logger.info("  Num steps = %d", num_train_optimization_steps)
 
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        if n_gpu > 0:
+            torch.cuda.manual_seed_all(args.seed)
+
         if args.local_rank == -1:
             train_sampler = RandomSampler(train_data)
         else:
