@@ -10,7 +10,7 @@ def split_on_score(df):
 
 for string in ["full", "punch", "body"]:
     train = pd.read_csv("output/output_for_bert/{}/train.csv".format(string), encoding="utf-8", names=['score', 'same_letter', "text"], index_col=None)
-    dev = pd.read_csv("output/output_for_bert/{}/dev.csv".format(string), encoding="utf-8", names=['score', 'same_letter', "text"], index_col=None)
+    dev = pd.read_csv("output/output_for_bert/{}/dev.tsv".format(string), encoding="utf-8", names=['score', 'same_letter', "text"], index_col=None)
     test = pd.read_csv("output/output_for_bert/{}/test.csv".format(string), encoding="utf-8", names=['score', 'same_letter', "text"], index_col=None)
 
     train.drop("same_letter", axis=1, inplace=True)

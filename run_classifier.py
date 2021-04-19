@@ -254,6 +254,8 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     logger.info("Creating features from dataset file at %s", args.data_dir)
 
     if args.old_load:
+        logger.info('using old data features')
+
         processor = processors[args.task_name]()
         label_list = processor.get_labels()
 
@@ -272,6 +274,8 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
         dataset = TensorDataset(input_ids, input_masks, token_type_ids, labels)
 
     else:
+        logger.info("creating features from new dataset")
+
         dataset = HumorDetectionDataset(args.data_dir, args.max_seq_length, task, args.ambiguity_fn)
         features = convert_dataset_to_features(dataset, args.max_seq_length, tokenizer)
 

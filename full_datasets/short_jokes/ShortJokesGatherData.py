@@ -94,5 +94,5 @@ data_dev.reset_index(inplace=True, drop=True)
 data_test.reset_index(inplace=True, drop=True)
 
 data_train.to_csv("shortjokes/train.csv", encoding="utf-8", header=False,)
-data_dev.to_csv("shortjokes/dev.csv", encoding="utf-8", header=False,)
+data_dev.to_csv("shortjokes/dev.tsv", encoding="utf-8", header=False,)
 data_test[["text"]].to_csv("shortjokes/test.csv", encoding="utf-8", header=True,)
