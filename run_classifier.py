@@ -596,13 +596,15 @@ def main():
                              "Positive power of 2: static loss scaling value.\n")
     parser.add_argument("--overwrite_cache", action='store_true')
     parser.add_argument('--ambiguity_fn', type=str, default="none",
-                        help='Ambiguity function. none, wn (for WordNet), or csi (for course sense inventory)')
+                        help='Ambiguity function. none, wn (for WordNet), csi (for course sense inventory), or tf-idf '
+                             '(baseline scores)')
     parser.add_argument('--rnn_size', type=int, default=768,
                         help='Hidden dimension of each direction of the bi-LSTM.')
     parser.add_argument('--bert_base', action='store_true', default=False,
                         help='loads in bert-base instead of our custom model.')
     parser.add_argument('--use_clean_data', action='store_true', default=False,
                         help='Whether to use clean data.')
+    parser.add_argument('--model_weights', default=None, help="Path to model weights, if loading a saved model")
     args = parser.parse_args()
 
     args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -643,20 +645,19 @@ def main():
             len(train_data) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
 
     # Prepare model
-    if not args.bert_base:
-        logger.info('Using custom model')
-        model = HumorDetectionModel(rnn_size=args.rnn_size, use_ambiguity=use_ambiguity)
+    if args.model_weights:
+        model = torch.load(args.model_weights, map_location=args.device)
     else:
-        logger.info('Loading in standard bert-base-uncased -- baseline testing')
-        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
-
-    model.to(args.device)
+        if not args.bert_base:
+            logger.info('Using custom model')
+            model = HumorDetectionModel(rnn_size=args.rnn_size, use_ambiguity=use_ambiguity)
+        else:
+            logger.info('Loading in standard bert-base-uncased -- baseline testing')
+            model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
+        model.to(args.device)
 
     if args.do_train:
         tr_loss, global_step = train(args, train_data, model, tokenizer)
-    else:
-        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
-    model.to(args.device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         # TODO: need raw evaluation here
