@@ -33,8 +33,10 @@ class HumorDetectionDataset(torch.utils.data.Dataset):
             extension = "_wordnet_amb.tsv"
         elif ambiguity_fn == "csi":
             extension = "_csi_amb.tsv"
+        elif ambiguity_fn == "tf-idf":
+            extension = "_csi_amb.tsv"
         else:
-            print("Error: ambiguity_fn must be one of ['none', 'wn', 'csi'].")
+            print("Error: ambiguity_fn must be one of ['none', 'wn', 'csi', 'tf-idf'].")
             exit(1)
         if use_clean_data:
             extension = "_clean" + extension
