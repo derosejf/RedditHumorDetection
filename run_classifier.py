@@ -109,19 +109,18 @@ class DataProcessor(object):
             return lines
 
 
-class MrpcProcessor(DataProcessor):
+class DumbProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
     def get_train_examples(self, data_dir):
         """See base class."""
-        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "train.tsv")))
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+            self._read_tsv(os.path.join(data_dir, "train_wordnet_amb.tsv")), "train")
 
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+            self._read_tsv(os.path.join(data_dir, "dev_wordnet_amb.tsv")), "dev")
 
     def get_labels(self):
         """See base class."""
@@ -129,16 +128,14 @@ class MrpcProcessor(DataProcessor):
 
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
+        """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
-            if i == 0:
-                continue
             guid = "%s-%s" % (set_type, i)
             text_a = line[3]
-            text_b = line[4]
-            label = line[0]
+            label = line[1]
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
         return examples
 
 
@@ -244,7 +241,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     processors = {
         "cola": ColaProcessor,
         "mnli": MnliProcessor,
-        "mrpc": MrpcProcessor,
+        "new": DumbProcessor,
         "sst-2": Sst2Processor,
     }
 
