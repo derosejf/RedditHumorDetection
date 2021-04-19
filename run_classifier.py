@@ -522,12 +522,23 @@ def main():
                     print('Step {}, Loss {}'.format(global_step, round(tr_loss / global_step, 4)))
 
         # Save a trained model and the associated configuration
-        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-        output_model_file = os.path.join(args.output_dir, 'weights')#WEIGHTS_NAME)
-        torch.save(model_to_save.state_dict(), output_model_file)
-        output_config_file = os.path.join(args.output_dir, 'config')#CONFIG_NAME)
-        with open(output_config_file, 'w') as f:
-            f.write(model_to_save.config.to_json_string())
+        # model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+        # output_model_file = os.path.join(args.output_dir, 'weights')#WEIGHTS_NAME)
+        # torch.save(model_to_save.state_dict(), output_model_file)
+        # output_config_file = os.path.join(args.output_dir, 'config')#CONFIG_NAME)
+        # with open(output_config_file, 'w') as f:
+        #     f.write(model_to_save.config.to_json_string())
+
+        # create output directory
+        if not os.path.exists(args.output_dir):
+            os.mkdir(args.output_dir)
+
+        # Save - model, tokenizer, args
+        logger.info("Saving model checkpoint to %s", args.output_dir)
+        torch.save(model.state_dict(), os.path.join(args.output_dir, "state_dict.pt"))
+
+        torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+        tokenizer.save_pretrained(args.output_dir)
 
         # Load a trained model and config that you have fine-tuned
         # config = BertConfig(output_config_file)
