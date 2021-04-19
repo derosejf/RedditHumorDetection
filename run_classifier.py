@@ -50,7 +50,6 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
                     level = logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
@@ -236,144 +235,63 @@ class Sst2Processor(DataProcessor):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
-    """Loads a data file into a list of `InputBatch`s."""
-
-    label_map = {label : i for i, label in enumerate(label_list)}
-
-    features = []
-    for (ex_index, example) in enumerate(examples):
-        tokens_a = tokenizer.tokenize(example.text_a)
-
-        tokens_b = None
-        if example.text_b:
-            tokens_b = tokenizer.tokenize(example.text_b)
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-        else:
-            # Account for [CLS] and [SEP] with "- 2"
-            if len(tokens_a) > max_seq_length - 2:
-                tokens_a = tokens_a[:(max_seq_length - 2)]
-
-        # The convention in BERT is:
-        # (a) For sequence pairs:
-        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-        #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
-        # (b) For single sequences:
-        #  tokens:   [CLS] the dog is hairy . [SEP]
-        #  type_ids: 0   0   0   0  0     0 0
-        #
-        # Where "type_ids" are used to indicate whether this is the first
-        # sequence or the second sequence. The embedding vectors for `type=0` and
-        # `type=1` were learned during pre-training and are added to the wordpiece
-        # embedding vector (and position vector). This is not *strictly* necessary
-        # since the [SEP] token unambigiously separates the sequences, but it makes
-        # it easier for the model to learn the concept of sequences.
-        #
-        # For classification tasks, the first vector (corresponding to [CLS]) is
-        # used as as the "sentence vector". Note that this only makes sense because
-        # the entire model is fine-tuned.
-        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-        segment_ids = [0] * len(tokens)
-
-        if tokens_b:
-            tokens += tokens_b + ["[SEP]"]
-            segment_ids += [1] * (len(tokens_b) + 1)
-
-        input_ids = tokenizer.convert_tokens_to_ids(tokens)
-
-        # The mask has 1 for real tokens and 0 for padding tokens. Only real
-        # tokens are attended to.
-        input_mask = [1] * len(input_ids)
-
-        # Zero-pad up to the sequence length.
-        padding = [0] * (max_seq_length - len(input_ids))
-        input_ids += padding
-        input_mask += padding
-        segment_ids += padding
-
-        assert len(input_ids) == max_seq_length
-        assert len(input_mask) == max_seq_length
-        assert len(segment_ids) == max_seq_length
-
-        label_id = label_map[example.label]
-        if ex_index < 5:
-            logger.info("*** Example ***")
-            logger.info("guid: %s" % (example.guid))
-            logger.info("tokens: %s" % " ".join(
-                    [str(x) for x in tokens]))
-            logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-            logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-            logger.info(
-                    "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-            logger.info("label: %s (id = %d)" % (example.label, label_id))
-
-        features.append(
-                InputFeatures(input_ids=input_ids,
-                              input_mask=input_mask,
-                              segment_ids=segment_ids,
-                              label_id=label_id))
-    return features
-
-
 def load_and_cache_examples(args, tokenizer, evaluate=False):
     '''
     Loads in a cached file for training and/or builds a cached file for this data
 
     :return:
     '''
+    processors = {
+        "cola": ColaProcessor,
+        "mnli": MnliProcessor,
+        "mrpc": MrpcProcessor,
+        "sst-2": Sst2Processor,
+    }
+
     # Build the dataset
     task = 'dev' if evaluate else 'train'
-    cached_features_files = os.path.join(args.data_dir, 'cached_{}_{}_{}'.format(
-        task,
-        args.ambiguity_fn,
-        str(args.max_seq_length)))
 
-    if os.path.exists(cached_features_files) and not args.overwrite_cache:
-        logger.info("Creating features from dataset file at %s", os.path.join(args.data_dir, cached_features_files))
-        features = torch.load(cached_features_files)
+    logger.info("Creating features from dataset file at %s", args.data_dir)
+
+    if args.old_load:
+        processor = processors[args.task_name]()
+        label_list = processor.get_labels()
+
+        if not evaluate:
+            examples = processor.get_train_examples(args.data_dir)
+        else:
+            examples = processor.get_dev_examples(args.data_dir)
+
+        features = convert_examples_new(examples, label_list, args.max_seq_length, tokenizer)
+
+        input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+        input_masks = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+        token_type_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
+        labels = torch.tensor([f.label_id for f in features], dtype=torch.long)
+
+        dataset = TensorDataset(input_ids, input_masks, token_type_ids, labels)
+
     else:
-        logger.info("Creating features from dataset file at %s", args.data_dir)
-
         dataset = HumorDetectionDataset(args.data_dir, args.max_seq_length, task, args.ambiguity_fn)
         features = convert_dataset_to_features(dataset, args.max_seq_length, tokenizer)
 
-        logger.info("Saving features into cached file %s", cached_features_files)
-        torch.save(features, cached_features_files)
+        # convert features to tensor dataset
+        input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+        input_masks = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+        token_type_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
+        ambiguity_scores = torch.tensor([f.ambiguity for f in features], dtype=torch.long)
+        labels = torch.tensor([f.label_id for f in features], dtype=torch.long)
 
-    # convert features to tensor dataset
-    input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    input_masks = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    token_type_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
-    #ambiguity_scores = torch.tensor([f.ambiguity for f in features], dtype=torch.long)
-    labels = torch.tensor([f.label_id for f in features], dtype=torch.long)
+        dataset = TensorDataset(input_ids, input_masks, token_type_ids, labels, ambiguity_scores)
 
-    dataset = TensorDataset(input_ids, input_masks, token_type_ids, labels)#, ambiguity_scores)
-
+    logger.info("Features Built.")
     return dataset
 
-
-def _truncate_seq_pair(tokens_a, tokens_b, max_length):
-    """Truncates a sequence pair in place to the maximum length."""
-
-    # This is a simple heuristic which will always truncate the longer sequence
-    # one token at a time. This makes more sense than truncating an equal percent
-    # of tokens from each, since if one sequence is very short then each token
-    # that's truncated likely contains more information than a longer sequence.
-    while True:
-        total_length = len(tokens_a) + len(tokens_b)
-        if total_length <= max_length:
-            break
-        if len(tokens_a) > len(tokens_b):
-            tokens_a.pop()
-        else:
-            tokens_b.pop()
 
 def accuracy(out, labels):
     outputs = np.argmax(out, axis=1)
     return np.sum(outputs == labels)
+
 
 def get_metrics(logits, labels):
     # import pdb;pdb.set_trace()
@@ -456,6 +374,7 @@ def main():
                         type=int,
                         default=-1,
                         help="local_rank for distributed training on gpus")
+    parser.add_argument('--old_load', action='store_true')
     parser.add_argument('--seed',
                         type=int,
                         default=42,
@@ -475,39 +394,11 @@ def main():
     parser.add_argument("--overwrite_cache", action='store_true')
     parser.add_argument('--ambiguity_fn', action='store_true', default="none",
                         help='Ambiguity function. none, wn (for WordNet), or csi (for course sense inventory)')
-    parser.add_argument('--server_ip', type=str, default='', help="Can be used for distant debugging.")
-    parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")
     args = parser.parse_args()
 
-    if args.server_ip and args.server_port:
-        # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
-        import ptvsd
-        ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
-        ptvsd.wait_for_attach()
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    n_gpu = torch.cuda.device_count()
 
-    processors = {
-        "cola": ColaProcessor,
-        "mnli": MnliProcessor,
-        "mrpc": MrpcProcessor,
-        "sst-2": Sst2Processor,
-    }
-
-    num_labels_task = {
-        "cola": 2,
-        "sst-2": 2,
-        "mnli": 3,
-        "mrpc": 2,
-    }
-
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
-    else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
-        n_gpu = 1
-        # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.distributed.init_process_group(backend='nccl')
     logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
         device, n_gpu, bool(args.local_rank != -1), args.fp16))
 
@@ -531,16 +422,8 @@ def main():
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    task_name = args.task_name.lower()
+    args.task_name = args.task_name.lower()
 
-    if task_name not in processors:
-        raise ValueError("Task not found: %s" % (task_name))
-
-    '''
-    processor = processors[task_name]()
-    num_labels = num_labels_task[task_name]
-    label_list = processor.get_labels()
-    '''
     train_examples = None
     num_train_optimization_steps = None
 
@@ -548,33 +431,12 @@ def main():
     train_data = load_and_cache_examples(args, tokenizer)
 
     if args.do_train:
-        #train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = int(
             len(train_data) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
-        if args.local_rank != -1:
-            num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
     # Prepare model
-    # output_model_file = os.path.join("./1kfinal48", "pytorch_model.bin")
-    # model_state_dict = torch.load(output_model_file)
-    #cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank))
-    model = BertForSequenceClassification.from_pretrained(args.bert_model,
-              # state_dict=model_state_dict,
-              #cache_dir=cache_dir,
-              num_labels=2)
-
-    if args.fp16:
-        model.half()
+    model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
     model.to(device)
-    if args.local_rank != -1:
-        try:
-            from apex.parallel import DistributedDataParallel as DDP
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-
-        model = DDP(model)
-    elif n_gpu > 1:
-        model = torch.nn.DataParallel(model)
 
     # Prepare optimizer
     param_optimizer = list(model.named_parameters())
@@ -583,46 +445,17 @@ def main():
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-    if args.fp16:
-        try:
-            from apex.optimizers import FP16_Optimizer
-            from apex.optimizers import FusedAdam
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-
-        optimizer = FusedAdam(optimizer_grouped_parameters,
-                              lr=args.learning_rate,
-                              bias_correction=False,
-                              max_grad_norm=1.0)
-        if args.loss_scale == 0:
-            optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
-        else:
-            optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
-
-    else:
-        optimizer = AdamW(optimizer_grouped_parameters,
-                          lr=args.learning_rate)
-        #optimizer = BertAdam(optimizer_grouped_parameters,
-        #                     lr=args.learning_rate,
-        #                     warmup=args.warmup_proportion,
-        #                     t_total=num_train_optimization_steps)
+    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
 
     global_step = 0
     nb_tr_steps = 0
     tr_loss = 0
     if args.do_train:
-        #train_features = convert( #convert_examples_to_features(
-        #    train_examples, label_list, args.max_seq_length, tokenizer)
-
         logger.info("***** Running training *****")
         logger.info("  Num examples = %d", len(train_data))
         logger.info("  Batch size = %d", args.train_batch_size)
         logger.info("  Num steps = %d", num_train_optimization_steps)
-        #all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
-        #all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
-        #all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
-        #all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-        #train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+
         if args.local_rank == -1:
             train_sampler = RandomSampler(train_data)
         else:
@@ -658,12 +491,6 @@ def main():
                 nb_tr_examples += inputs['input_ids'].size(0)
                 nb_tr_steps += 1
                 if (step + 1) % args.gradient_accumulation_steps == 0:
-                    #if args.fp16:
-                    #    # modify learning rate with special warm up BERT uses
-                    #    # if args.fp16 is False, BertAdam is used that handles this automatically
-                    #    lr_this_step = args.learning_rate * warmup_linear(global_step/num_train_optimization_steps, args.warmup_proportion)
-                    #    for param_group in optimizer.param_groups:
-                    #        param_group['lr'] = lr_this_step
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
@@ -683,24 +510,16 @@ def main():
         # model = BertForSequenceClassification(config, num_labels=num_labels)
         # model.load_state_dict(torch.load(output_model_file))
     else:
-        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=num_labels)
+        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        #eval_examples = processor.get_dev_examples(args.data_dir)
-        #eval_features = convert_examples_new( #convert_examples_to_features(
-        #    eval_examples, label_list, args.max_seq_length, tokenizer)
-
         eval_data = load_and_cache_examples(args, tokenizer, True)
 
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_data))
         logger.info("  Batch size = %d", args.eval_batch_size)
-        #all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
-        #all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
-        #all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
-        #all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-        #eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+
         # Run prediction for full data
         eval_sampler = SequentialSampler(eval_data)
         eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)

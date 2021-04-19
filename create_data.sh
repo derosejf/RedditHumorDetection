@@ -7,6 +7,6 @@ python3 full_datasets/reddit_jokes/reddit_cleaning/GetSplitFiles.py
 python3 full_datasets/reddit_jokes/reddit_cleaning/GetTSVFileForBERT.py
 cp full_datasets/reddit_jokes/reddit_cleaning/output/output_for_bert/full/*.tsv data/
 # remove the validation set
-rm data/dev.tsv
+#rm data/dev.tsv
 # move the test set for evaluation
-mv data/test.tsv data/dev.tsv
+#mv data/test.tsv data/dev.tsv
