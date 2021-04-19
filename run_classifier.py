@@ -534,23 +534,21 @@ def main():
         full_logits = None
         full_labels = None
 
-        for input_ids, input_mask, segment_ids, label_ids, _ in tqdm(eval_dataloader, desc="Evaluating"):
-            input_ids = input_ids.to(device)
-            input_mask = input_mask.to(device)
-            segment_ids = segment_ids.to(device)
-            label_ids = label_ids.to(device)
+        for batch in tqdm(eval_dataloader, desc="Evaluating"):
+            batch = tuple(t.to(device) for t in batch)
 
-            inputs = {'input_ids': input_ids,
-                      'token_type_ids': segment_ids,
-                      'attention_mask': input_mask,
-                      'labels': label_ids}
+            inputs = {'input_ids': batch[0],
+                      'token_type_ids': batch[2],
+                      'attention_mask': batch[1],
+                      'labels': batch[3]}
+
 
             with torch.no_grad():
                 outputs = model(**inputs)
                 tmp_eval_loss, logits = outputs[:2]
 
             logits = logits.detach().cpu().numpy()
-            label_ids = label_ids.to('cpu').numpy()
+            label_ids = inputs['labels'].to('cpu').numpy()
 
             # combine the labels for F1 scores
             if full_labels is None:
@@ -568,7 +566,7 @@ def main():
             eval_loss += tmp_eval_loss.mean().item()
             eval_accuracy += tmp_eval_accuracy
 
-            nb_eval_examples += input_ids.size(0)
+            nb_eval_examples += inputs['input_ids'].size(0)
             nb_eval_steps += 1
 
         eval_f1, eval_precision, eval_recall = get_metrics(full_logits, full_labels)

@@ -11,7 +11,7 @@ python3 run_classifier.py \
 --num_train_epochs=1.0 \
 --do_lower_case \
 --old_load \
---gradient_accumulation_steps 16 \
+--gradient_accumulation_steps 8 \
 --overwrite_cache \
 --bert_model=bert-base-uncased \
 --output_dir=./final_results \
