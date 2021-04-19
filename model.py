@@ -1,19 +1,13 @@
 import torch
 from torch.nn import Module, CrossEntropyLoss
-from transformers import BertModel, BertTokenizer, BertForSequenceClassification
-
-# from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-# from pytorch_pretrained_bert.modeling import BertForSequenceClassification, BertConfig, WEIGHTS_NAME, CONFIG_NAME
-# from pytorch_pretrained_bert.tokenization import BertTokenizer
+from transformers import BertModel, BertTokenizer
 
 
 class HumorDetectionModel(Module):
     def __init__(self, rnn_size, use_ambiguity=True, dropout=0.):
         super().__init__()
         self.use_ambiguity = use_ambiguity
-        #cache_dir = PYTORCH_PRETRAINED_BERT_CACHE
-        self.bert = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-        #self.bert = BertModel.from_pretrained("bert-base-uncased")
+        self.bert = BertModel.from_pretrained("bert-base-uncased")
         word_embedding_size = 768  # size of BERT embedding
         if use_ambiguity:
             word_embedding_size += 1  # we will be enhancing the token embeddings with ambiguity scores
@@ -39,7 +33,7 @@ class HumorDetectionModel(Module):
             input_ids=input_ids,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask
-        ).output_hidden_states
+        ).last_hidden_state
         if self.use_ambiguity:
             bert_embeds = torch.cat((bert_embeds, ambiguity_scores), dim=-1)
         rnn_output, (hn, cn) = self.rnn(bert_embeds)
