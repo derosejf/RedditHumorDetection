@@ -3,7 +3,7 @@ seed=$1 # 3 per
 seq_len=$2 # 128, 512
 amb_fn=$3 # none, csi, wn
 
-output_dir=/content/gdrive/MyDrive/Humor-Detection/custom_"$amb_fn"_"$seq_len"_"$seed"
+output_dir=/content/gdrive/MyDrive/Humor-Detection/custom_"$amb_fn"_"$seq_len"_"$seed"_clean
 echo "$output_dir"
 rm -rf "$output_dir"
 mkdir "$output_dir"
