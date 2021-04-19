@@ -18,7 +18,7 @@ class InputExample(object):
 
 
 class HumorDetectionDataset(torch.utils.data.Dataset):
-    def __init__(self, data_dir, max_len, task='train', ambiguity_fn="wn"):
+    def __init__(self, data_dir, max_len, task='train', ambiguity_fn="wn", use_clean_data=False):
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.label_map = {label: i for i, label in enumerate(["0", "1"])}
         self.max_len = max_len
@@ -36,6 +36,8 @@ class HumorDetectionDataset(torch.utils.data.Dataset):
         else:
             print("Error: ambiguity_fn must be one of ['none', 'wn', 'csi'].")
             exit(1)
+        if use_clean_data:
+            extension = "_clean" + extension
         data_file = task + extension
         self.read_tsv(os.path.join(data_dir, data_file))
 

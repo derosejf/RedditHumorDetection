@@ -278,7 +278,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
 
     logger.info("Creating features from dataset file at %s", args.data_dir)
 
-    if args.old_load:
+    if args.old_load: #for debugging
         logger.info('using old data features')
 
         processor = processors[args.task_name]()
@@ -301,7 +301,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     else:
         logger.info("creating features from new dataset")
 
-        dataset = HumorDetectionDataset(args.data_dir, args.max_seq_length, task, args.ambiguity_fn)
+        dataset = HumorDetectionDataset(args.data_dir, args.max_seq_length, task, args.ambiguity_fn, args.use_clean_data)
         features = convert_dataset_to_features(dataset, args.max_seq_length, tokenizer)
 
         # convert features to tensor dataset
@@ -601,6 +601,8 @@ def main():
                         help='Hidden dimension of each direction of the bi-LSTM.')
     parser.add_argument('--bert_base', action='store_true', default=False,
                         help='loads in bert-base instead of our custom model.')
+    parser.add_argument('--use_clean_data', action='store_true', default=False,
+                        help='Whether to use clean data.')
     args = parser.parse_args()
 
     args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
