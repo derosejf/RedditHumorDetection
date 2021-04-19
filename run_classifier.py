@@ -398,6 +398,8 @@ def main():
                         help='Ambiguity function. none, wn (for WordNet), or csi (for course sense inventory)')
     parser.add_argument('--rnn_size', type=int, default=768,
                         help='Hidden dimension of each direction of the bi-LSTM.')
+    parser.add_argument('--bert_base', action='store_true', default=False,
+                        help='loads in bert-base instead of our custom model.')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
