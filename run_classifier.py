@@ -600,6 +600,8 @@ def main():
                       'attention_mask': batch[1],
                       'labels': batch[3]}
 
+            if not args.bert_base:
+                inputs['ambiguity_scores'] = batch[4]
 
             with torch.no_grad():
                 outputs = model(**inputs)
