@@ -268,7 +268,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     :return:
     '''
     processors = {
-        "cola": ColaProcessor,
+        "old": ColaProcessor,
         "new_clean": DumbProcessorClean,
         "new": DumbProcessor
     }
@@ -412,8 +412,8 @@ def train(args, dataset, model, tokenizer):
         all_acc.append(round(eval_acc, 5))
         all_f1.append(round(eval_f1, 5))
 
+        logger.info('-------- END OF EPOCH -------')
         for ix in range(len(all_tr_loss)):
-            logger.info('-------- END OF EPOCH -------')
             output = 'Epoch: {}, Train Loss: {}, Eval Loss: {}, Eval Acc: {}, Eval F1: {}'.format(
                 (ix+1), all_tr_loss[ix], all_eval_loss[ix], all_acc[ix], all_f1[ix]
             )
