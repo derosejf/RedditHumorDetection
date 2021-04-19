@@ -403,7 +403,7 @@ def train(args, dataset, model, tokenizer):
                 global_step += 1
                 nb_tr_steps += 1
 
-                logger.info('Step {}, Loss {}'.format(global_step, round(tr_loss / global_step, 4)))
+                logger.info('Step {}, Loss {}'.format(global_step, round(tr_loss / nb_tr_steps, 4)))
         # end of epoch
         eval_loss, eval_acc, eval_f1 = evaluate(args, model, tokenizer)
 
@@ -631,16 +631,13 @@ def main():
 
     args.task_name = args.task_name.lower()
 
-    train_examples = None
-    num_train_optimization_steps = None
-
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
     train_data = load_and_cache_examples(args, tokenizer)
 
     use_ambiguity = args.ambiguity_fn != "none"
 
     if args.do_train:
-        num_train_optimization_steps = int(
+        args.num_train_optimization_steps = int(
             len(train_data) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
 
     # Prepare model
