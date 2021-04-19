@@ -394,7 +394,7 @@ def main():
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
     parser.add_argument("--overwrite_cache", action='store_true')
-    parser.add_argument('--ambiguity_fn', action='store_true', default="none",
+    parser.add_argument('--ambiguity_fn', type=str, default="none",
                         help='Ambiguity function. none, wn (for WordNet), or csi (for course sense inventory)')
     parser.add_argument('--rnn_size', type=int, default=768,
                         help='Hidden dimension of each direction of the bi-LSTM.')
