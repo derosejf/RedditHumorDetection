@@ -109,6 +109,34 @@ class DataProcessor(object):
             return lines
 
 
+class DumbProcessorClean(DataProcessor):
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "train_clean.tsv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "dev_clean.tsv")), "dev")
+
+    def get_labels(self):
+        """See base class."""
+        return ["0", "1"]
+
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            guid = "%s-%s" % (set_type, i)
+            text_a = line[3]
+            label = line[1]
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+        return examples
+
+
 class DumbProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
@@ -240,9 +268,8 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     '''
     processors = {
         "cola": ColaProcessor,
-        "mnli": MnliProcessor,
-        "new": DumbProcessor,
-        "sst-2": Sst2Processor,
+        "new_clean": DumbProcessorClean,
+        "new": DumbProcessor
     }
 
     # Build the dataset
