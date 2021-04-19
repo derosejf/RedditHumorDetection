@@ -331,6 +331,177 @@ def get_metrics(logits, labels):
     return f1, prec, recall
 
 
+def train(args, dataset, model, tokenizer):
+    # Prepare optimizer
+    param_optimizer = list(model.named_parameters())
+    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        ]
+    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
+
+    global_step = 0
+    tr_loss = 0
+
+    all_acc = []
+    all_tr_loss = []
+    all_eval_loss = []
+    all_f1 = []
+
+    logger.info("***** Running training *****")
+    logger.info("  Num examples = %d", len(dataset))
+    logger.info("  Batch size = %d", args.train_batch_size)
+    logger.info("  Num steps = %d", args.num_train_optimization_steps)
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if args.n_gpu > 0:
+        torch.cuda.manual_seed_all(args.seed)
+
+    if args.local_rank == -1:
+        train_sampler = RandomSampler(dataset)
+    else:
+        train_sampler = DistributedSampler(dataset)
+    train_dataloader = DataLoader(dataset, sampler=train_sampler, batch_size=args.train_batch_size)
+
+    model.train()
+    for _ in trange(int(args.num_train_epochs), desc="Epoch"):
+        tr_loss = 0
+        nb_tr_examples, nb_tr_steps = 0, 0
+        for step, batch in enumerate(train_dataloader):
+            batch = tuple(t.to(args.device) for t in batch)
+
+            inputs = {'input_ids': batch[0],
+                      'token_type_ids': batch[2],
+                      'attention_mask': batch[1],
+                      'labels': batch[3]}
+
+            if not args.bert_base:
+                inputs['ambiguity_scores'] = batch[4]
+
+            outputs = model(**inputs)
+            loss = outputs[0]
+
+            if args.n_gpu > 1:
+                loss = loss.mean()  # mean() to average on multi-gpu.
+            if args.gradient_accumulation_steps > 1:
+                loss = loss / args.gradient_accumulation_steps
+
+            if args.fp16:
+                optimizer.backward(loss)
+            else:
+                loss.backward()
+
+            tr_loss += loss.item()
+            nb_tr_examples += inputs['input_ids'].size(0)
+
+            if (step + 1) % args.gradient_accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+                global_step += 1
+                nb_tr_steps += 1
+
+                logger.info('Step {}, Loss {}'.format(global_step, round(tr_loss / global_step, 4)))
+        # end of epoch
+        eval_loss, eval_acc, eval_f1 = evaluate(args, model, tokenizer)
+
+        all_tr_loss.append(round(tr_loss / nb_tr_steps, 5))
+        all_eval_loss.append(round(eval_loss, 5))
+        all_acc.append(round(eval_acc, 5))
+        all_f1.append(round(eval_f1, 5))
+
+        for ix in range(len(all_tr_loss)):
+            logger.info('-------- END OF EPOCH -------')
+            output = 'Epoch: {}, Train Loss: {}, Eval Loss: {}, Eval Acc: {}, Eval F1: {}'.format(
+                (ix+1), all_tr_loss[ix], all_eval_loss[ix], all_acc[ix], all_f1[ix]
+            )
+            logger.info(output)
+
+    # create output directory
+    if not os.path.exists(args.output_dir):
+        os.mkdir(args.output_dir)
+
+    # Save - model, tokenizer, args
+    logger.info("Saving model checkpoint to %s", args.output_dir)
+    torch.save(model.state_dict(), os.path.join(args.output_dir, "state_dict.pt"))
+
+    torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+    tokenizer.save_pretrained(args.output_dir)
+
+    output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
+    with open(output_eval_file, "w") as writer:
+        for ix in range(len(all_tr_loss)):
+            output = 'Epoch: {}, Train Loss: {}, Eval Loss: {}, Eval Acc: {}, Eval F1: {}'.format(
+                (ix+1), all_tr_loss[ix], all_eval_loss[ix], all_acc[ix], all_f1[ix]
+            )
+            print(output, file=writer)
+
+    return tr_loss, global_step
+
+
+def evaluate(args, model, tokenizer):
+    eval_data = load_and_cache_examples(args, tokenizer, True)
+
+    logger.info("***** Running evaluation *****")
+    logger.info("  Num examples = %d", len(eval_data))
+    logger.info("  Batch size = %d", args.eval_batch_size)
+
+    # Run prediction for full data
+    eval_sampler = SequentialSampler(eval_data)
+    eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
+
+    model.eval()
+    eval_loss, eval_accuracy = 0, 0
+    nb_eval_steps, nb_eval_examples = 0, 0
+    full_logits = None
+    full_labels = None
+
+    for batch in tqdm(eval_dataloader, desc="Evaluating"):
+        batch = tuple(t.to(args.device) for t in batch)
+
+        inputs = {'input_ids': batch[0],
+                  'token_type_ids': batch[2],
+                  'attention_mask': batch[1],
+                  'labels': batch[3]}
+
+        with torch.no_grad():
+            outputs = model(**inputs)
+            tmp_eval_loss, logits = outputs[:2]
+
+        logits = logits.detach().cpu().numpy()
+        label_ids = inputs['labels'].to('cpu').numpy()
+
+        # combine the labels for F1 scores
+        if full_labels is None:
+            full_labels = label_ids
+        else:
+            full_labels = np.append(full_labels, label_ids, axis=0)
+
+        if full_logits is None:
+            full_logits = logits
+        else:
+            full_logits = np.append(full_logits, logits, axis=0)
+
+        tmp_eval_accuracy = accuracy(logits, label_ids)
+
+        eval_loss += tmp_eval_loss.mean().item()
+        eval_accuracy += tmp_eval_accuracy
+
+        nb_eval_examples += inputs['input_ids'].size(0)
+        nb_eval_steps += 1
+
+    eval_f1, eval_precision, eval_recall = get_metrics(full_logits, full_labels)
+    full_accuracy = accuracy(full_logits, full_labels)
+
+    eval_loss = eval_loss / nb_eval_steps
+    eval_accuracy = eval_accuracy / nb_eval_examples
+
+    # TODO: could return precision and recall here
+    return eval_loss, eval_accuracy, eval_f1
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -429,11 +600,11 @@ def main():
                         help='loads in bert-base instead of our custom model.')
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-    n_gpu = torch.cuda.device_count()
+    args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    args.n_gpu = torch.cuda.device_count()
 
     logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
-        device, n_gpu, bool(args.local_rank != -1), args.fp16))
+        args.device, args.n_gpu, bool(args.local_rank != -1), args.fp16))
 
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
@@ -444,7 +615,7 @@ def main():
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    if n_gpu > 0:
+    if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
     if not args.do_train and not args.do_eval:
@@ -477,178 +648,18 @@ def main():
         logger.info('Loading in standard bert-base-uncased -- baseline testing')
         model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
 
-    #model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
-    model.to(device)
+    model.to(args.device)
 
-    # Prepare optimizer
-    param_optimizer = list(model.named_parameters())
-    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
-
-    global_step = 0
-    nb_tr_steps = 0
-    tr_loss = 0
     if args.do_train:
-        logger.info("***** Running training *****")
-        logger.info("  Num examples = %d", len(train_data))
-        logger.info("  Batch size = %d", args.train_batch_size)
-        logger.info("  Num steps = %d", num_train_optimization_steps)
-
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        if n_gpu > 0:
-            torch.cuda.manual_seed_all(args.seed)
-
-        if args.local_rank == -1:
-            train_sampler = RandomSampler(train_data)
-        else:
-            train_sampler = DistributedSampler(train_data)
-        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
-
-        model.train()
-        for _ in trange(int(args.num_train_epochs), desc="Epoch"):
-            tr_loss = 0
-            nb_tr_examples, nb_tr_steps = 0, 0
-            for step, batch in enumerate(train_dataloader):
-                batch = tuple(t.to(device) for t in batch)
-
-                inputs = {'input_ids': batch[0],
-                          'token_type_ids': batch[2],
-                          'attention_mask': batch[1],
-                          'labels': batch[3]}
-
-                if not args.bert_base:
-                    inputs['ambiguity_scores'] = batch[4]
-
-                outputs = model(**inputs)
-                loss = outputs[0]
-
-                if n_gpu > 1:
-                    loss = loss.mean() # mean() to average on multi-gpu.
-                if args.gradient_accumulation_steps > 1:
-                    loss = loss / args.gradient_accumulation_steps
-
-                if args.fp16:
-                    optimizer.backward(loss)
-                else:
-                    loss.backward()
-
-                tr_loss += loss.item()
-                nb_tr_examples += inputs['input_ids'].size(0)
-                nb_tr_steps += 1
-                if (step + 1) % args.gradient_accumulation_steps == 0:
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    global_step += 1
-
-                    print('Step {}, Loss {}'.format(global_step, round(tr_loss / global_step, 4)))
-
-        # Save a trained model and the associated configuration
-        # model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-        # output_model_file = os.path.join(args.output_dir, 'weights')#WEIGHTS_NAME)
-        # torch.save(model_to_save.state_dict(), output_model_file)
-        # output_config_file = os.path.join(args.output_dir, 'config')#CONFIG_NAME)
-        # with open(output_config_file, 'w') as f:
-        #     f.write(model_to_save.config.to_json_string())
-
-        # create output directory
-        if not os.path.exists(args.output_dir):
-            os.mkdir(args.output_dir)
-
-        # Save - model, tokenizer, args
-        logger.info("Saving model checkpoint to %s", args.output_dir)
-        torch.save(model.state_dict(), os.path.join(args.output_dir, "state_dict.pt"))
-
-        torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-        tokenizer.save_pretrained(args.output_dir)
-
-        # Load a trained model and config that you have fine-tuned
-        # config = BertConfig(output_config_file)
-        # model = BertForSequenceClassification(config, num_labels=num_labels)
-        # model.load_state_dict(torch.load(output_model_file))
+        tr_loss, global_step = train(args, train_data, model, tokenizer)
     else:
         model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2)
-    model.to(device)
+    model.to(args.device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        eval_data = load_and_cache_examples(args, tokenizer, True)
-
-        logger.info("***** Running evaluation *****")
-        logger.info("  Num examples = %d", len(eval_data))
-        logger.info("  Batch size = %d", args.eval_batch_size)
-
-        # Run prediction for full data
-        eval_sampler = SequentialSampler(eval_data)
-        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
-
-        model.eval()
-        eval_loss, eval_accuracy = 0, 0
-        nb_eval_steps, nb_eval_examples = 0, 0
-        full_logits = None
-        full_labels = None
-
-        for batch in tqdm(eval_dataloader, desc="Evaluating"):
-            batch = tuple(t.to(device) for t in batch)
-
-            inputs = {'input_ids': batch[0],
-                      'token_type_ids': batch[2],
-                      'attention_mask': batch[1],
-                      'labels': batch[3]}
-
-
-            with torch.no_grad():
-                outputs = model(**inputs)
-                tmp_eval_loss, logits = outputs[:2]
-
-            logits = logits.detach().cpu().numpy()
-            label_ids = inputs['labels'].to('cpu').numpy()
-
-            # combine the labels for F1 scores
-            if full_labels is None:
-                full_labels = label_ids
-            else:
-                full_labels = np.append(full_labels, label_ids, axis=0)
-
-            if full_logits is None:
-                full_logits = logits
-            else:
-                full_logits = np.append(full_logits, logits, axis=0)
-
-            tmp_eval_accuracy = accuracy(logits, label_ids)
-
-            eval_loss += tmp_eval_loss.mean().item()
-            eval_accuracy += tmp_eval_accuracy
-
-            nb_eval_examples += inputs['input_ids'].size(0)
-            nb_eval_steps += 1
-
-        eval_f1, eval_precision, eval_recall = get_metrics(full_logits, full_labels)
-        full_accuracy = accuracy(full_logits, full_labels)
-
-        eval_loss = eval_loss / nb_eval_steps
-        eval_accuracy = eval_accuracy / nb_eval_examples
-        loss = tr_loss/global_step if args.do_train else None
-        result = {'eval_loss': eval_loss,
-                  'eval_accuracy': eval_accuracy,
-                  'eval_accuracy_full': full_accuracy,
-                  'global_step': global_step,
-                  'loss': loss,
-                  'eval_f1': eval_f1,
-                  'eval_precision': eval_precision,
-                  'eval_recall': eval_recall
-                  }
-
-        output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
-        with open(output_eval_file, "w") as writer:
-            logger.info("***** Eval results *****")
-            for key in sorted(result.keys()):
-                logger.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
+        # TODO: need raw evaluation here
+        pass
+    return
 
 if __name__ == "__main__":
     main()
