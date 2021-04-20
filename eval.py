@@ -276,7 +276,7 @@ def evaluate(args, model, tokenizer, ambiguity_fn, task_name):
                   'attention_mask': batch[1],
                   'labels': batch[3]}
 
-        if "baseline_" not in args.data_dir:
+        if not args.bert_base:
             inputs['ambiguity_scores'] = batch[4]
 
         with torch.no_grad():
@@ -335,11 +335,7 @@ def main():
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
                              "bert-base-multilingual-cased, bert-base-chinese.")
-    parser.add_argument("--task_name",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The name of the task to train.")
+
 
     # Other parameters
     parser.add_argument("--cache_dir",
@@ -401,11 +397,6 @@ def main():
         ambiguity_fn = "wn"
     elif "_tf-idf_" in args.model_weights:
         ambiguity_fn = "tf-idf"
-    task_name = "old"
-    if "new_clean" in args.model_weights:
-        task_name = "new_clean"
-    elif "new" in args.model_weights:
-        task_name = "new"
     if args.bert_base:
         model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2).to(args.device)
     else:
@@ -414,6 +405,7 @@ def main():
 
     # Loop through 3 Test sets
     out_class = None
+    task_name = 'old'
 
     datasets = ['rJokes', 'short_jokes', 'puns']
     base_dir = args.data_dir
@@ -421,8 +413,10 @@ def main():
     for data_dir in datasets:
         if data_dir == 'rJokes':
             args.data_dir = base_dir
+            task_name = 'new_clean'
         else:
             args.data_dir = os.path.join(base_dir, data_dir)
+            task_name = 'old'
 
         set_results = defaultdict(float)
         logger.info('****** Evaluating on {}'.format(data_dir))
