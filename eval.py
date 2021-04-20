@@ -452,9 +452,9 @@ def main():
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    table = pd.DataFrame(output, columns=['name', 'acc', 'precision', 'recall', 'f1', 'loss']).set_index('name')
-    out_file = 'test_results_{}'.format(out_class[:-2])
-    table.to_csv(os.path.join(save_dir, out_file))
+    #table = pd.DataFrame(output, columns=['name', 'acc', 'precision', 'recall', 'f1', 'loss']).set_index('name')
+    #out_file = 'test_results_{}'.format(out_class[:-2])
+    #table.to_csv(os.path.join(save_dir, out_file))
     return
 
 if __name__ == "__main__":
