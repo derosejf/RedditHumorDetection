@@ -5,6 +5,8 @@ import csv
 import logging
 import os
 import sys
+from collections import defaultdict
+import pandas as pd
 
 import numpy as np
 import torch
@@ -96,6 +98,11 @@ class DumbProcessorClean(DataProcessor):
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "dev_clean.tsv")), "dev")
 
+    def get_test_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "test_clean.tsv")), "dev")
+
     def get_labels(self):
         """See base class."""
         return ["0", "1"]
@@ -143,39 +150,6 @@ class DumbProcessor(DataProcessor):
         return examples
 
 
-class MnliProcessor(DataProcessor):
-    """Processor for the MultiNLI data set (GLUE version)."""
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev_matched.tsv")),
-            "dev_matched")
-
-    def get_labels(self):
-        """See base class."""
-        return ["contradiction", "entailment", "neutral"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0:
-                continue
-            guid = "%s-%s" % (set_type, line[0])
-            text_a = line[8]
-            text_b = line[9]
-            label = line[-1]
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-
 class ColaProcessor(DataProcessor):
     """Processor for the CoLA data set (GLUE version)."""
 
@@ -188,6 +162,11 @@ class ColaProcessor(DataProcessor):
         """See base class."""
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+
+    def get_test_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "test.tsv")), "dev")
 
     def get_labels(self):
         """See base class."""
@@ -205,37 +184,6 @@ class ColaProcessor(DataProcessor):
         return examples
 
 
-class Sst2Processor(DataProcessor):
-    """Processor for the SST-2 data set (GLUE version)."""
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0:
-                continue
-            guid = "%s-%s" % (set_type, i)
-            text_a = line[0]
-            label = line[1]
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
-        return examples
-
-
 def load_and_cache_examples(args, tokenizer, ambiguity_fn, task_name):
     '''
     Loads in a cached file for training and/or builds a cached file for this data
@@ -244,8 +192,7 @@ def load_and_cache_examples(args, tokenizer, ambiguity_fn, task_name):
     '''
     processors = {
         "old": ColaProcessor,
-        "new_clean": DumbProcessorClean,
-        "new": DumbProcessor
+        "new_clean": DumbProcessorClean
     }
 
     # Build the dataset
@@ -259,8 +206,8 @@ def load_and_cache_examples(args, tokenizer, ambiguity_fn, task_name):
         processor = processors[task_name]()
         label_list = processor.get_labels()
 
-        if not evaluate:
-            examples = processor.get_train_examples(args.data_dir)
+        if args.data_name == 'rJokes':
+            examples = processor.get_test_examples(args.data_dir)
         else:
             examples = processor.get_dev_examples(args.data_dir)
 
@@ -341,7 +288,7 @@ def evaluate(args, model, tokenizer, ambiguity_fn, task_name):
                 print("Label: ", inputs["label"][i])
             printed_first = True
 
-        if "baseline_" not in args.data_dir:
+        if not args.bert_base:
             inputs['ambiguity_scores'] = batch[4]
 
         with torch.no_grad():
@@ -376,8 +323,15 @@ def evaluate(args, model, tokenizer, ambiguity_fn, task_name):
     eval_loss = eval_loss / nb_eval_steps
     eval_accuracy = eval_accuracy / nb_eval_examples
 
-    # TODO: could return precision and recall here
-    return eval_loss, eval_accuracy, eval_f1
+    results = {
+        'acc' : eval_accuracy,
+        'precision' : eval_precision,
+        'recall' : eval_recall,
+        'f1' : eval_f1,
+        'loss' : eval_loss
+    }
+
+    return results
 
 
 def main():
@@ -393,6 +347,7 @@ def main():
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
                              "bert-base-multilingual-cased, bert-base-chinese.")
+
 
     # Other parameters
     parser.add_argument("--cache_dir",
@@ -454,25 +409,62 @@ def main():
         ambiguity_fn = "wn"
     elif "_tf-idf_" in args.model_weights:
         ambiguity_fn = "tf-idf"
-    task_name = "old"
-    if "new_clean" in args.model_weights:
-        task_name = "new_clean"
-    elif "new" in args.model_weights:
-        task_name = "new"
     if args.bert_base:
         model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=2).to(args.device)
     else:
         use_ambiguity = ambiguity_fn != "none"
         model = HumorDetectionModel(rnn_size=768, use_ambiguity=use_ambiguity).to(args.device)
-    for weights_path in args.model_weights.split(","):
-        state_dict = torch.load(weights_path)
-        model.load_state_dict(state_dict)
-        print(f"Evaluating model: {weights_path}")
-        eval_loss, eval_accuracy, eval_f1 = evaluate(args, model, tokenizer, ambiguity_fn, task_name)
-        print(f"Loss: {eval_loss}")
-        print(f"Accuracy: {eval_accuracy}")
-        print(f"F1 {eval_f1}")
 
+    # Loop through 3 Test sets
+    out_class = None
+    task_name = 'old'
+
+    datasets = ['rJokes', 'puns']#, 'short_jokes']
+    base_dir = args.data_dir
+    output = []
+    for data_dir in datasets:
+        if data_dir == 'rJokes':
+            args.data_dir = base_dir
+            task_name = 'new_clean'
+        else:
+            args.data_dir = os.path.join(base_dir, data_dir)
+            task_name = 'old'
+
+        args.data_name = data_dir
+
+        set_results = defaultdict(float)
+        logger.info('****** Evaluating on {}'.format(data_dir))
+        seeds = args.model_weights.split(",")
+        for weights_path in seeds:
+            state_dict = torch.load(weights_path)
+            model.load_state_dict(state_dict)
+            print(f"Evaluating model: {weights_path}")
+            results = evaluate(args, model, tokenizer, ambiguity_fn, task_name)
+
+            out_class = weights_path
+
+            # update rolling
+            for metric, vals in results.items():
+                set_results[metric] += vals
+
+        # average
+        logger.info('***** Averaged Results for {}'.format(data_dir))
+        for metric, vals in set_results.items():
+            set_results[metric] = vals / len(seeds)
+            logger.info('***** {}: {}'.format(metric, set_results[metric]))
+
+        output.append([data_dir, set_results['acc'], set_results['precision'],
+                       set_results['recall'], set_results['f1'], set_results['loss']])
+
+    # Write output to file
+    save_dir = 'test_results'
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+
+    #table = pd.DataFrame(output, columns=['name', 'acc', 'precision', 'recall', 'f1', 'loss']).set_index('name')
+    #out_file = 'test_results_{}'.format(out_class[:-2])
+    #table.to_csv(os.path.join(save_dir, out_file))
+    return
 
 if __name__ == "__main__":
     main()
