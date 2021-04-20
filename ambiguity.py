@@ -67,7 +67,7 @@ def main():
     output_extension = "_csi_amb"
 
     sw = stopwords.words("english")
-    filepaths = ['data/train_clean.tsv', 'data/dev_clean.tsv', 'data/test_clean.tsv']
+    filepaths = ['data/short_jokes/train.tsv', 'data/short_jokes/dev.tsv', 'data/short_jokes/test.tsv']  # change for each dataset
     for filepath in filepaths:
         with open(filepath, "r") as in_f:
             with open(filepath.replace(".tsv", f"{output_extension}.tsv"), "w") as out_f:
@@ -75,7 +75,7 @@ def main():
                 writer = csv.writer(out_f)
                 for row in reader:
                     scores = []
-                    text = row[3].replace("_____", " ")
+                    text = row[-1].replace("_____", " ")
                     text = utils.prepare_text(text).split()
                     for word in text:
                         if word != "[SEP]":
