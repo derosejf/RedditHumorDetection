@@ -277,7 +277,7 @@ def load_and_cache_examples(args, tokenizer, ambiguity_fn, task_name):
         logger.info("creating features from new dataset")
 
         dataset = HumorDetectionDataset(args.data_dir, args.max_seq_length, task, ambiguity_fn,
-                                        args.use_clean_data)
+                                        use_clean_data=("clean" in task_name))
         features = convert_dataset_to_features(dataset, args.max_seq_length, tokenizer)
 
         # convert features to tensor dataset
@@ -424,8 +424,6 @@ def main():
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
     parser.add_argument("--overwrite_cache", action='store_true')
-    parser.add_argument('--use_clean_data', action='store_true', default=False,
-                        help='Whether to use clean data.')
     parser.add_argument('--bert_base', action='store_true', default=False,
                         help='loads in bert-base instead of our custom model.')
     parser.add_argument('--model_weights', required=True, help="Path to model weights, if loading a saved model. "
