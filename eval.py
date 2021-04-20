@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 from collections import defaultdict
-from pandas import pd
+import pandas as pd
 
 import numpy as np
 import torch
@@ -335,6 +335,11 @@ def main():
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
                              "bert-base-multilingual-cased, bert-base-chinese.")
+    parser.add_argument("--task_name",
+                        default=None,
+                        type=str,
+                        required=True,
+                        help="The name of the task to train.")
 
     # Other parameters
     parser.add_argument("--cache_dir",
