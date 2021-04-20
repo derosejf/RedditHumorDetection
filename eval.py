@@ -285,7 +285,7 @@ def evaluate(args, model, tokenizer, ambiguity_fn, task_name):
                 print("Tokens: ", tokenizer.convert_ids_to_tokens(inputs["input_ids"][i]))
                 print("Token type ids: ", inputs["token_type_ids"][i])
                 print("Attn mask: ", inputs["attention_mask"][i])
-                print("Label: ", inputs["label"][i])
+                print("Label: ", inputs["labels"][i])
             printed_first = True
 
         if not args.bert_base:
