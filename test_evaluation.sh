@@ -1,8 +1,5 @@
 #!/bin/sh
 
---bert_model=bert-base-uncased --model_weights \
-
-
 export BERT_BASE_DIR=./uncased_L-24_H-1024_A-16
 export CUDA_VISIBLE_DEVICES=0
 python3 eval.py \
