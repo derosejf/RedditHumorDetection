@@ -410,7 +410,7 @@ def main():
     out_class = None
     task_name = 'old'
 
-    datasets = ['rJokes', 'short_jokes', 'puns']
+    datasets = ['rJokes', 'puns', 'short_jokes']
     base_dir = args.data_dir
     output = [['name', 'acc', 'precision', 'recall', 'f1', 'loss']]
     for data_dir in datasets:
