@@ -206,7 +206,10 @@ def load_and_cache_examples(args, tokenizer, ambiguity_fn, task_name):
         processor = processors[task_name]()
         label_list = processor.get_labels()
 
-        examples = processor.get_test_examples(args.data_dir)
+        if args.data_name == 'rJokes':
+            examples = processor.get_test_examples(args.data_dir)
+        else:
+            examples = processor.get_dev_examples(args.data_dir)
 
         features = convert_examples_new(examples, label_list, args.max_seq_length, tokenizer)
 
@@ -417,6 +420,8 @@ def main():
         else:
             args.data_dir = os.path.join(base_dir, data_dir)
             task_name = 'old'
+
+        args.data_name = data_dir
 
         set_results = defaultdict(float)
         logger.info('****** Evaluating on {}'.format(data_dir))
