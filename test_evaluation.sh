@@ -12,5 +12,6 @@ python3 eval.py \
 --bert_model=bert-base-uncased \
 --max_seq_length 128 \
 --old_load \
+--use_bert_base \
 --task_name=old \
 --model_weights /content/gdrive/MyDrive/Humor-Detection/baseline_new_clean_128_0/state_dict.pt,/content/gdrive/MyDrive/Humor-Detection/baseline_new_clean_128_1/state_dict.pt,/content/gdrive/MyDrive/Humor-Detection/baseline_new_clean_128_2/state_dict
