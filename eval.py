@@ -324,6 +324,7 @@ def evaluate(args, model, tokenizer, ambiguity_fn, task_name):
     full_logits = None
     full_labels = None
 
+    printed_first = False
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         batch = tuple(t.to(args.device) for t in batch)
 
@@ -331,6 +332,14 @@ def evaluate(args, model, tokenizer, ambiguity_fn, task_name):
                   'token_type_ids': batch[2],
                   'attention_mask': batch[1],
                   'labels': batch[3]}
+
+        if not printed_first:
+            for i in range(3):
+                print("Tokens: ", tokenizer.convert_ids_to_tokens(inputs["input_ids"][i]))
+                print("Token type ids: ", tokenizer.convert_ids_to_tokens(inputs["token_type_ids"][i]))
+                print("Attn mask: ", tokenizer.convert_ids_to_tokens(inputs["attention_mask"][i]))
+                print("Label: ", tokenizer.convert_ids_to_tokens(inputs["label"][i]))
+            printed_first = True
 
         if "baseline_" not in args.data_dir:
             inputs['ambiguity_scores'] = batch[4]
