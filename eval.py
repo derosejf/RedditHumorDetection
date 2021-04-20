@@ -410,9 +410,9 @@ def main():
     out_class = None
     task_name = 'old'
 
-    datasets = ['rJokes', 'puns', 'short_jokes']
+    datasets = ['rJokes', 'puns']#, 'short_jokes']
     base_dir = args.data_dir
-    output = [['name', 'acc', 'precision', 'recall', 'f1', 'loss']]
+    output = []
     for data_dir in datasets:
         if data_dir == 'rJokes':
             args.data_dir = base_dir
@@ -452,7 +452,7 @@ def main():
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    table = pd.DataFrame(output).set_index('name')
+    table = pd.DataFrame(output, columns=['name', 'acc', 'precision', 'recall', 'f1', 'loss']).set_index('name')
     out_file = 'test_results_{}'.format(out_class[:-2])
     table.to_csv(os.path.join(save_dir, out_file))
     return
