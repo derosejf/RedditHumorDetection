@@ -417,9 +417,9 @@ def main():
 
     # Loop through 3 Test sets
     out_class = None
-    task_name = 'old'
+    task_name = 'new_clean'
 
-    datasets = ['rJokes', 'puns']#, 'short_jokes']
+    datasets = ['rJokes']#, 'puns']#, 'short_jokes']
     base_dir = args.data_dir
     output = []
     for data_dir in datasets:
